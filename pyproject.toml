@@ -1,0 +1,23 @@
+[project]
+name = "phone-agent"
+version = "0.1.0"
+description = "A minimal Python agent built with uv"
+readme = "README.md"
+authors = [
+    { name = "zizzey2002", email = "YoshimoriGroshong232@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "langgraph>=1.1.10",
+    "openai>=2.36.0",
+    "pillow>=12.2.0",
+    "python-dotenv>=1.2.2",
+]
+
+[project.scripts]
+phone-agent = "phone_agent:main"
+phone-plan = "phone_agent.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
