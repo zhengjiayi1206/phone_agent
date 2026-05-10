@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import json
 from typing import Any
 
 from dotenv import load_dotenv
@@ -68,6 +69,18 @@ def debug_log(event: str, **fields: Any) -> None:
             value = f"{value[:157]}..."
         parts.append(f"{key}={value}")
     print(" ".join(parts), file=sys.stderr)
+
+
+def debug_json(event: str, payload: Any) -> None:
+    if not debug_enabled():
+        return
+    try:
+        text = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+    except TypeError:
+        text = repr(payload)
+    if len(text) > 1200 and not debug_verbose_enabled():
+        text = f"{text[:1197]}..."
+    print(f"[debug] {event} {text}", file=sys.stderr)
 
 
 def debug_verbose(event: str, **fields: Any) -> None:

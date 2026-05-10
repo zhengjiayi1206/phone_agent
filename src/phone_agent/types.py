@@ -11,31 +11,9 @@ class ClarifiedProblem:
 
 
 @dataclass(frozen=True)
-class PlanDecision:
-    need_plan: bool
+class ProblemDecision:
+    need_phone_loop: bool
     reason: str
-
-
-@dataclass(frozen=True)
-class PlanStep:
-    index: int
-    title: str
-    tool: str | None = None
-    arguments: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class ExecutionPlan:
-    goal: str
-    need_adb: bool
-    steps: list[PlanStep]
-
-
-@dataclass(frozen=True)
-class PlanStepResult:
-    step_index: int
-    title: str
-    output: str
 
 
 @dataclass(frozen=True)
@@ -45,23 +23,23 @@ class ActionDecision:
     reason: str
     tool: str | None = None
     arguments: dict[str, Any] = field(default_factory=dict)
+    target: str = ""
 
 
 @dataclass(frozen=True)
 class LoopResult:
     iteration: int
     observation: str
+    reason: str
     action: str
     output: str
+    arguments: dict[str, Any] = field(default_factory=dict)
 
 
 class AgentState(TypedDict, total=False):
     user_input: str
     problem: ClarifiedProblem
-    decision: PlanDecision
-    plan: ExecutionPlan
-    current_step_index: int
-    step_results: list[PlanStepResult]
+    decision: ProblemDecision
     loop_count: int
     max_loops: int
     action_decision: ActionDecision

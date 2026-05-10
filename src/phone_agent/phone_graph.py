@@ -20,42 +20,45 @@ class PhoneAgentGraph:
     def build(self):
         debug_log("graph", action="build")
         graph = StateGraph(AgentState)
+
+        # 主流程只保留三件事：
+        # 1. 明确问题并判断是否需要操作手机
+        # 2. phone_loop：截图、判断、执行一个动作
+        # 3. answer：完成或达到循环上限后输出结果
         graph.add_node("clarify_problem", self.problem.clarify)
-        graph.add_node("decide_plan", self.problem.decide_phone_loop)
-        graph.add_node("init_loop", self.loop.init_loop)
-        graph.add_node("perceive_and_decide", self.vision.perceive_and_decide)
-        graph.add_node("execute_action", self.loop.execute_action)
+        graph.add_node("phone_loop", self.phone_loop)
         graph.add_node("answer", self.answer_builder.answer)
 
         graph.add_edge(START, "clarify_problem")
-        graph.add_edge("clarify_problem", "decide_plan")
         graph.add_conditional_edges(
-            "decide_plan",
-            self.loop.route_after_decision,
-            {
-                "init_loop": "init_loop",
-                "answer": "answer",
-            },
-        )
-        graph.add_edge("init_loop", "perceive_and_decide")
-        graph.add_conditional_edges(
-            "perceive_and_decide",
-            self.loop.route_after_perception,
-            {
-                "execute_action": "execute_action",
-                "answer": "answer",
-            },
+            "clarify_problem",
+            self.loop.route_after_problem,
+            {"phone_loop": "phone_loop", "answer": "answer"},
         )
         graph.add_conditional_edges(
-            "execute_action",
-            self.loop.route_after_action,
-            {
-                "perceive_and_decide": "perceive_and_decide",
-                "answer": "answer",
-            },
+            "phone_loop",
+            self.loop.route_after_loop,
+            {"phone_loop": "phone_loop", "answer": "answer"},
         )
         graph.add_edge("answer", END)
         return graph.compile()
+
+    def phone_loop(self, state: AgentState) -> AgentState:
+        debug_log("enter", node="phone_loop", iteration=state.get("loop_count", 0) + 1)
+        state = self.loop.ensure_started(state)
+        state = self.vision.perceive_and_decide(state)
+
+        if self.loop.should_execute_action(state):
+            state = self.loop.execute_action(state)
+        else:
+            debug_log(
+                "action.skip",
+                iteration=state.get("loop_count", 0),
+                done=state["action_decision"].done,
+                tool=state["action_decision"].tool or "none",
+            )
+
+        return state
 
 
 def build_graph():

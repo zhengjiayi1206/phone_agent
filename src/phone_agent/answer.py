@@ -11,7 +11,7 @@ class AnswerBuilder:
         problem = state["problem"].problem
         decision = state["decision"]
 
-        if not decision.need_plan:
+        if not decision.need_phone_loop:
             final = self._direct_answer(problem)
             debug_log("answer", mode="direct", chars=len(final))
             return {**state, "final": final}
@@ -51,7 +51,9 @@ class AnswerBuilder:
         ]
         for result in state.get("loop_results", []):
             lines.append(f"{result.iteration}. observation={result.observation}")
+            lines.append(f"   reason={result.reason}")
             lines.append(f"   action={result.action}")
+            lines.append(f"   arguments={result.arguments}")
             lines.append(f"   output={result.output}")
 
         if action_decision:

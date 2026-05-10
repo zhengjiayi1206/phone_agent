@@ -137,30 +137,6 @@ def wait(seconds: float = 1.0) -> str:
     return f"Waited {seconds}s"
 
 
-def is_package_installed(package_name: str) -> bool:
-    output = run_adb(["adb", "shell", "pm", "list", "packages", package_name])
-    return f"package:{package_name}" in output.splitlines()
-
-
-def launch_package(package_name: str) -> str:
-    if not is_package_installed(package_name):
-        return f"Package not installed: {package_name}"
-    run_adb(
-        [
-            "adb",
-            "shell",
-            "monkey",
-            "-p",
-            package_name,
-            "-c",
-            "android.intent.category.LAUNCHER",
-            "1",
-        ]
-    )
-    time.sleep(1.0)
-    return f"Launched package: {package_name}"
-
-
 def image_data_url(path: Path) -> str:
     data = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:image/png;base64,{data}"
