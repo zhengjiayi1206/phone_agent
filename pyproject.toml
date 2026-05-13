@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 phone-agent = "phone_agent:main"
 phone-plan = "phone_agent.cli:main"
+phone-flow-plan = "phone_agent.langgraph_planner.cli:main"
 
 [build-system]
 requires = ["hatchling"]

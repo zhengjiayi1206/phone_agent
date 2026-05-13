@@ -16,6 +16,46 @@ class PhoneTool:
     handler: Callable[..., str]
 
 
+class ToolRegistry:
+    def __init__(self) -> None:
+        self.tools: dict[str, PhoneTool] = {}
+
+    def register(self, tool: PhoneTool) -> "ToolRegistry":
+        self.tools[tool.name] = tool
+        return self
+
+    def describe(self) -> str:
+        lines = ["可用手机工具:"]
+        for tool in self.tools.values():
+            lines.append(f"- {tool.name}: {tool.description}")
+        return "\n".join(lines)
+
+    def execute(self, name: str, arguments: dict[str, Any] | None = None) -> str:
+        tool = self.tools.get(name)
+        if tool is None:
+            raise ValueError(f"Unknown phone tool: {name}")
+
+        clean_arguments = {key: value for key, value in (arguments or {}).items() if value is not None}
+        debug_json("tool.dispatch", {"tool": name, "arguments": clean_arguments})
+        output = tool.handler(**clean_arguments)
+        debug_json("tool.result", {"tool": name, "output": output})
+        return output
+
+
+def build_tool_registry() -> ToolRegistry:
+    return (
+        ToolRegistry()
+        .register(PhoneTool("screenshot", "截取当前屏幕，并生成 1000x1000 标准化截图。参数: {}", screenshot))
+        .register(PhoneTool("tap", '点击 1000x1000 截图坐标。参数: {"element": [x, y]}', tap))
+        .register(PhoneTool("swipe", '滑动 1000x1000 截图坐标。参数: {"start": [x,y], "end": [x,y], "duration_ms": 300}', swipe))
+        .register(PhoneTool("back", "按 Android 返回键。参数: {}", lambda: adb_tools.press_back()))
+        .register(PhoneTool("home", "按 Android Home 键。参数: {}", lambda: adb_tools.press_home()))
+        .register(PhoneTool("enter", "按 Android Enter 键。参数: {}", lambda: adb_tools.press_enter()))
+        .register(PhoneTool("input_text", '向当前输入框输入文字。参数: {"text": "..."}', input_text))
+        .register(PhoneTool("wait", '等待界面稳定。参数: {"seconds": 1}', wait))
+    )
+
+
 def screenshot() -> str:
     debug_log("tool.start", tool="screenshot")
     path = adb_tools.take_screenshot()
@@ -30,22 +70,20 @@ def screenshot() -> str:
         },
     )
     return (
-        f"Screenshot saved to {path}; normalized screenshot saved to artifacts/phone-screen-1000.png; "
-        f"coordinate mapping: model sees 1000x1000, real screen is {scale.source_width}x{scale.source_height}"
+        "Screenshot saved. normalized_path=artifacts/phone-screen-1000.png "
+        f"source={scale.source_width}x{scale.source_height}"
     )
 
 
-def tap_from_model_args(**kwargs: Any) -> str:
-    debug_json("tool.tap.args", kwargs)
+def tap(**kwargs: Any) -> str:
     x, y = extract_point(kwargs)
     real_x, real_y = normalized_to_real_point(x, y)
     debug_json("tool.tap.map", {"normalized": [x, y], "real": [real_x, real_y]})
     result = adb_tools.tap(real_x, real_y)
-    return f"{result}; normalized ({x}, {y}) -> real ({real_x}, {real_y})"
+    return f"{result}; normalized=({x}, {y}) real=({real_x}, {real_y})"
 
 
-def swipe_from_model_args(**kwargs: Any) -> str:
-    debug_json("tool.swipe.args", kwargs)
+def swipe(**kwargs: Any) -> str:
     start_x, start_y = extract_point(
         kwargs,
         point_keys=("start", "from", "begin"),
@@ -59,7 +97,6 @@ def swipe_from_model_args(**kwargs: Any) -> str:
         y_keys=("end_y", "y2"),
     )
     duration_ms = int(kwargs.get("duration_ms") or kwargs.get("duration") or 300)
-
     real_start_x, real_start_y = normalized_to_real_point(start_x, start_y)
     real_end_x, real_end_y = normalized_to_real_point(end_x, end_y)
     debug_json(
@@ -73,21 +110,18 @@ def swipe_from_model_args(**kwargs: Any) -> str:
         },
     )
     result = adb_tools.swipe(real_start_x, real_start_y, real_end_x, real_end_y, duration_ms)
-    return (
-        f"{result}; normalized ({start_x}, {start_y}) -> ({end_x}, {end_y}) "
-        f"mapped to real ({real_start_x}, {real_start_y}) -> ({real_end_x}, {real_end_y})"
-    )
+    return f"{result}; normalized=({start_x}, {start_y})->({end_x}, {end_y})"
 
 
-def wait_from_model_args(**kwargs: Any) -> str:
-    debug_json("tool.wait.args", kwargs)
-    seconds = kwargs.get("seconds")
-    if seconds is None and "duration_ms" in kwargs:
-        seconds = float(kwargs["duration_ms"]) / 1000
-    if seconds is None and "duration" in kwargs:
-        seconds = normalize_duration(kwargs["duration"])
-    if seconds is None:
-        seconds = 1.0
+def input_text(text: str) -> str:
+    return adb_tools.input_text(text)
+
+
+def wait(seconds: float = 1.0, duration_ms: int | None = None, duration: str | None = None) -> str:
+    if duration_ms is not None:
+        seconds = duration_ms / 1000
+    elif duration is not None:
+        seconds = normalize_duration(duration)
     return adb_tools.wait(float(seconds))
 
 
@@ -124,75 +158,17 @@ def normalize_duration(value: Any) -> float:
     text = str(value).strip().lower()
     if text.endswith("ms"):
         return float(text[:-2].strip()) / 1000
-    if text.endswith("milliseconds"):
-        return float(text[: -len("milliseconds")].strip()) / 1000
-    if text.endswith("seconds"):
-        return float(text[: -len("seconds")].strip())
-    if text.endswith("second"):
-        return float(text[: -len("second")].strip())
     if text.endswith("s"):
         return float(text[:-1].strip())
     return float(text)
 
 
-PHONE_TOOLS: dict[str, PhoneTool] = {
-    "screenshot": PhoneTool(
-        name="screenshot",
-        description="截图并生成 1000x1000 标准化图片，后续点击/滑动坐标都基于这张图。",
-        handler=screenshot,
-    ),
-    "tap": PhoneTool(
-        name="tap",
-        description='点击 1000x1000 图片上的位置，参数使用 {"element": [x, y]}。',
-        handler=tap_from_model_args,
-    ),
-    "swipe": PhoneTool(
-        name="swipe",
-        description='滑动 1000x1000 图片上的区域，参数使用 {"start": [x1, y1], "end": [x2, y2]}。',
-        handler=swipe_from_model_args,
-    ),
-    "back": PhoneTool(
-        name="back",
-        description="按 Android 返回键。",
-        handler=adb_tools.press_back,
-    ),
-    "home": PhoneTool(
-        name="home",
-        description="按 Android Home 键。",
-        handler=adb_tools.press_home,
-    ),
-    "enter": PhoneTool(
-        name="enter",
-        description="按 Android Enter 键。",
-        handler=adb_tools.press_enter,
-    ),
-    "input_text": PhoneTool(
-        name="input_text",
-        description='向当前输入框输入文字，参数使用 {"text": "..."}。',
-        handler=adb_tools.input_text,
-    ),
-    "wait": PhoneTool(
-        name="wait",
-        description='等待界面稳定，参数可用 {"seconds": 1} 或 {"duration_ms": 1000}。',
-        handler=wait_from_model_args,
-    ),
-}
+DEFAULT_REGISTRY = build_tool_registry()
 
 
 def run_ui_phone_tool(name: str, arguments: dict[str, Any] | None = None) -> str:
-    tool = PHONE_TOOLS.get(name)
-    if tool is None:
-        raise ValueError(f"Unknown phone tool: {name}")
-
-    clean_arguments = {key: value for key, value in (arguments or {}).items() if value is not None}
-    debug_json("tool.dispatch", {"tool": name, "arguments": clean_arguments})
-    output = tool.handler(**clean_arguments)
-    debug_json("tool.result", {"tool": name, "output": output})
-    return output
+    return DEFAULT_REGISTRY.execute(name, arguments)
 
 
 def describe_phone_tools() -> str:
-    lines = ["Available phone tools:"]
-    for tool in PHONE_TOOLS.values():
-        lines.append(f"- {tool.name}: {tool.description}")
-    return "\n".join(lines)
+    return DEFAULT_REGISTRY.describe()

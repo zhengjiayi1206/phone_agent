@@ -3,13 +3,13 @@ from __future__ import annotations
 import argparse
 
 from phone_agent.config import load_config
-from phone_agent.phone_graph import run_phone_plan
+from phone_agent.runtime import run_phone_plan
 
 
 def main() -> None:
     load_config()
 
-    parser = argparse.ArgumentParser(description="Simple LangGraph phone planner.")
+    parser = argparse.ArgumentParser(description="Claw-style phone UI agent loop.")
     parser.add_argument("task", nargs="*", help="Phone task text.")
     args = parser.parse_args()
 

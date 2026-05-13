@@ -1,48 +1,51 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, TypedDict
+from typing import Any, Literal
+
+
+Role = Literal["user", "assistant", "tool"]
 
 
 @dataclass(frozen=True)
-class ClarifiedProblem:
-    original_input: str
-    problem: str
+class Message:
+    role: Role
+    content: str
+    name: str | None = None
+    data: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
-class ProblemDecision:
-    need_phone_loop: bool
-    reason: str
-
-
-@dataclass(frozen=True)
-class ActionDecision:
-    done: bool
-    observation: str
-    reason: str
-    tool: str | None = None
+class ToolCall:
+    name: str
     arguments: dict[str, Any] = field(default_factory=dict)
-    target: str = ""
+    reason: str = ""
 
 
 @dataclass(frozen=True)
-class LoopResult:
-    iteration: int
+class AssistantDecision:
+    done: bool
+    answer: str
     observation: str
     reason: str
-    action: str
+    tool_calls: list[ToolCall] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ToolResult:
+    name: str
+    arguments: dict[str, Any]
     output: str
-    arguments: dict[str, Any] = field(default_factory=dict)
+    is_error: bool = False
 
 
-class AgentState(TypedDict, total=False):
-    user_input: str
-    problem: ClarifiedProblem
-    decision: ProblemDecision
-    loop_count: int
-    max_loops: int
-    action_decision: ActionDecision
-    loop_results: list[LoopResult]
+@dataclass(frozen=True)
+class TurnSummary:
+    task: str
     done: bool
-    final: str
+    answer: str
+    iterations: int
+    messages: list[Message]
+    tool_results: list[ToolResult]
+    session_path: str
+    memory_path: str
